@@ -20,3 +20,17 @@ Notes and next steps
 
 Hosting on onelessthing.life
 - You can host this Node app on any server supporting Node 18+ or adapt frontend into a static site and use serverless functions for the API. If you want, I can prepare a deployment guide for your hosting provider.
+
+Frontend (React + Vite)
+
+The frontend is now a React + Vite app in the `client/` folder. It proxies `/api` to the backend during development.
+
+To run the client in development (recommended):
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+By default Vite serves the client on port `4173` and proxies API calls to `http://localhost:3000`.
