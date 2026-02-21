@@ -23,7 +23,8 @@ export default function App() {
     if (!city.trim()) return alert('Enter a city')
     setLoading(true)
     try {
-      const res = await axios.get(`/api/weather`, { params: { city, gender } })
+      const base = (import.meta.env.VITE_API_BASE as string) || ''
+      const res = await axios.get(`${base}/api/weather`, { params: { city, gender } })
       const data = res.data
       setTiles(data.tiles)
       setWeather(data.weather)
