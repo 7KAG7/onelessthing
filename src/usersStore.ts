@@ -10,6 +10,7 @@ export type User = {
   passwordHash: string
   ageRange?: string
   sexPreference?: string
+  avatar?: string
 }
 
 async function ensureFile() {

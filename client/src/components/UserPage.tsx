@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import axios from 'axios'
+import AvatarIcon from './AvatarIcon'
 
 function tokenKey() { return 'olt_token' }
 
@@ -10,6 +11,7 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
   const [user, setUser] = useState<any | null>(null)
   const [ageRange, setAgeRange] = useState('')
   const [sexPreference, setSexPreference] = useState('')
+  const [avatar, setAvatar] = useState<string | undefined>(undefined)
 
   const base = (import.meta.env.VITE_API_BASE as string) || ''
 
@@ -27,6 +29,7 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
       setUser(res.data)
       setAgeRange(res.data.ageRange || '')
       setSexPreference(res.data.sexPreference || '')
+      setAvatar(res.data.avatar)
       setMode('profile')
     } catch (err) {
       console.warn('not logged in')
@@ -59,8 +62,9 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
 
   async function doSaveProfile() {
     try {
-      const res = await axios.put(`${base}/api/user/profile`, { ageRange, sexPreference })
+      const res = await axios.put(`${base}/api/user/profile`, { ageRange, sexPreference, avatar })
       setUser(res.data)
+      setAvatar(res.data.avatar)
       alert('Profile saved')
     } catch (err: any) {
       alert(err?.response?.data?.error || err.message)
@@ -108,7 +112,10 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
 
       {user && (
         <div className="profile-box">
-          <div><strong>{user.username}</strong></div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <div style={{width:56,height:56}}><AvatarIcon id={avatar || 'default'} size={56} /></div>
+            <div><strong>{user.username}</strong></div>
+          </div>
           <label>Age range</label>
           <select value={ageRange} onChange={(e) => setAgeRange(e.target.value)}>
             <option value="">Select age range</option>
@@ -129,6 +136,14 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
             <option value="unisex">Unisex</option>
             <option value="notsay">Prefer not to say</option>
           </select>
+          <label style={{marginTop:12}}>Avatar</label>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>
+            {['default','sun','cloud','umbrella','boots'].map((id) => (
+              <button key={id} onClick={() => setAvatar(id)} style={{border: avatar===id ? '2px solid #0b5fff' : '1px solid #e6e9ef', padding:8, borderRadius:8, background:'#fff'}}>
+                <AvatarIcon id={id} size={40} />
+              </button>
+            ))}
+          </div>
           <div style={{display:'flex',gap:8,marginTop:8}}>
             <button onClick={doSaveProfile}>Save profile</button>
           </div>

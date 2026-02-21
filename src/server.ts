@@ -112,7 +112,7 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUser({ id: uuidv4(), username, passwordHash });
     const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference } });
+    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar } });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -128,7 +128,7 @@ app.post('/api/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
     const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference } });
+    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar } });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -153,7 +153,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const uid = (req as any).userId as string;
     const user = await findUserById(uid);
     if (!user) return res.status(404).json({ error: 'not found' });
-    res.json({ id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference });
+    res.json({ id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -165,7 +165,7 @@ app.put('/api/user/profile', authMiddleware, async (req, res) => {
     const { ageRange, sexPreference } = req.body;
     const updated = await updateUser(uid, { ageRange, sexPreference });
     if (!updated) return res.status(404).json({ error: 'not found' });
-    res.json({ id: updated.id, username: updated.username, ageRange: updated.ageRange, sexPreference: updated.sexPreference });
+    res.json({ id: updated.id, username: updated.username, ageRange: updated.ageRange, sexPreference: updated.sexPreference, avatar: updated.avatar });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
