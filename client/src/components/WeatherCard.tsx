@@ -1,4 +1,5 @@
 import React from 'react'
+import { WeatherLoop, type WeatherLoopVariant } from '../weatherLoops'
 
 function degToCompass(num: number) {
   const val = Math.floor((num / 22.5) + 0.5)
@@ -23,6 +24,7 @@ export default function WeatherCard({ weather }: { weather: any }) {
     if (main.includes('snow')) return 'snow'
     if (main.includes('cloud')) return 'clouds'
     if (main.includes('thunder')) return 'thunder'
+    if (main.includes('fog') || main.includes('mist') || main.includes('haze') || main.includes('smoke')) return 'fog'
     return 'clear'
   })()
 
@@ -35,33 +37,28 @@ export default function WeatherCard({ weather }: { weather: any }) {
   const windSpeed = weather.wind?.speed
   const windDeg = weather.wind?.deg
   const precip = (weather.rain && (weather.rain['1h'] || weather.rain['3h'])) || (weather.snow && (weather.snow['1h'] || weather.snow['3h'])) || 0
+  const cloudiness = weather.clouds?.all || 0
+  const isNight = typeof icon === 'string' ? icon.includes('n') : false
+
+  const loopVariant: WeatherLoopVariant = (() => {
+    if (conditionType === 'thunder') return 'storm'
+    if (conditionType === 'snow') return 'snow'
+    if (conditionType === 'fog') return 'fog'
+    if (conditionType === 'rain') return precip >= 2 ? 'rain-heavy' : 'rain-light'
+    if ((windSpeed || 0) >= 20) return 'windy'
+    if (conditionType === 'clouds') {
+      if (cloudiness >= 80) return 'overcast'
+      return isNight ? 'partly-cloudy-night' : 'partly-cloudy-day'
+    }
+    return isNight ? 'clear-night' : 'clear-day'
+  })()
 
   const iconUrl = icon ? `https://openweathermap.org/img/wn/${icon}@2x.png` : undefined
 
   return (
     <section className="weather-card" role="region" aria-label={`Current weather for ${location}`}>
       <div className={`weather-bg weather-bg--${conditionType}`} aria-hidden="true">
-        {conditionType === 'clouds' && (
-          <>
-            <div className="cloud cloud--one" />
-            <div className="cloud cloud--two" />
-          </>
-        )}
-        {conditionType === 'rain' && (
-          <div className="rain">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <span key={i} className={`drop drop--${i % 4}`} />
-            ))}
-          </div>
-        )}
-        {conditionType === 'snow' && (
-          <div className="snow">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <span key={i} className="flake" />
-            ))}
-          </div>
-        )}
-        {conditionType === 'clear' && <div className="sun" />}
+        <WeatherLoop variant={loopVariant} />
       </div>
 
       <div className="weather-left">

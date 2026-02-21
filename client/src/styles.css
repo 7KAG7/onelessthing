@@ -70,27 +70,31 @@ main.tile-column{flex:1;min-height:0;padding:20px 28px;display:flex;justify-cont
 
 /* Background animation layer */
 .weather-bg{position:absolute;inset:0;z-index:0;pointer-events:none}
-.weather-card > *{position:relative;z-index:1}
+.weather-card > :not(.weather-bg){position:relative;z-index:1}
 
 /* Sun */
 .weather-bg--clear .sun{position:absolute;right:16px;top:8px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8c6 0%, #ffd66b 30%, #ffb84d 60%, transparent 61%)}
-.weather-bg--clear .sun::after{content:'';position:absolute;inset:-30px;border-radius:50%;box-shadow:0 0 40px 12px rgba(255,184,77,0.25)}
+.weather-bg--clear .sun::after{content:'';position:absolute;inset:-30px;border-radius:50%;box-shadow:0 0 40px 12px rgba(255,184,77,0.25);animation:sunPulse 5s ease-in-out infinite}
+.weather-bg--clear .sun{animation:sunFloat 6s ease-in-out infinite}
 
 /* Clouds */
 .cloud{position:absolute;background:#fff;border-radius:999px;box-shadow:0 6px 18px rgba(16,24,40,0.08);opacity:0.95}
 .cloud--one{width:220px;height:64px;left:-40px;top:10px}
 .cloud--two{width:160px;height:48px;left:-100px;top:40px}
 .weather-bg--clouds .cloud{animation:cloudMove 18s linear infinite}
+.weather-bg--clouds .cloud--two{animation-duration:23s}
 
 @keyframes cloudMove{0%{transform:translateX(-10%)}50%{transform:translateX(30%)}100%{transform:translateX(-10%)}}
+@keyframes sunPulse{0%{transform:scale(1);opacity:.65}50%{transform:scale(1.08);opacity:.9}100%{transform:scale(1);opacity:.65}}
+@keyframes sunFloat{0%{transform:translateY(0)}50%{transform:translateY(-8px)}100%{transform:translateY(0)}}
 
 /* Rain */
 .rain{position:absolute;inset:0;overflow:hidden}
 .drop{position:absolute;top:-10%;width:2px;height:18px;background:linear-gradient(#9fd8ff,#6fb3ff);opacity:0.85;border-radius:2px}
-.drop--0{left:10%;animation:fall 1s linear infinite 0s}
-.drop--1{left:25%;animation:fall 1.1s linear infinite 0.2s}
-.drop--2{left:40%;animation:fall 0.9s linear infinite 0.1s}
-.drop--3{left:60%;animation:fall 1.2s linear infinite 0.3s}
+.drop--0{animation:fall 1s linear infinite 0s}
+.drop--1{animation:fall 1.1s linear infinite 0.2s}
+.drop--2{animation:fall 0.9s linear infinite 0.1s}
+.drop--3{animation:fall 1.2s linear infinite 0.3s}
 .drop--0{height:16px}
 .drop--1{height:20px}
 .drop--2{height:14px}
@@ -100,13 +104,22 @@ main.tile-column{flex:1;min-height:0;padding:20px 28px;display:flex;justify-cont
 
 /* Snow */
 .snow{position:absolute;inset:0;overflow:hidden}
-.flake{position:absolute;left:50%;top:-5%;width:8px;height:8px;background:rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(255,255,255,0.6);animation:snowFall 6s linear infinite}
-.flake:nth-child(2){left:20%;animation-duration:7s}
-.flake:nth-child(3){left:35%;animation-duration:5.5s}
-.flake:nth-child(4){left:60%;animation-duration:6.5s}
-.flake:nth-child(5){left:80%;animation-duration:8s}
+.flake{position:absolute;top:-5%;width:8px;height:8px;background:rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(255,255,255,0.6);animation:snowFall 6s linear infinite}
+.flake:nth-child(2n){animation-duration:7s}
+.flake:nth-child(3n){animation-duration:5.5s}
+.flake:nth-child(4n){animation-duration:8s}
 
 @keyframes snowFall{0%{transform:translateY(-10%) translateX(0) rotate(0)}100%{transform:translateY(110%) translateX(20px) rotate(360deg)}}
+
+/* Thunder */
+.weather-bg--thunder{background:linear-gradient(180deg,rgba(104,114,138,.28) 0%,rgba(84,94,120,.4) 100%)}
+.thunder{position:absolute;inset:0}
+.storm-cloud{position:absolute;top:10px;left:-40px;width:250px;height:70px;background:rgba(212,220,238,.85);border-radius:999px;box-shadow:0 10px 24px rgba(25,31,46,.2);animation:cloudMove 16s linear infinite}
+.storm-cloud--two{top:36px;left:-110px;width:190px;height:56px;opacity:.9;animation-duration:20s}
+.bolt{position:absolute;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:24px solid #ffe08a;filter:drop-shadow(0 0 8px rgba(255,224,138,.8));opacity:0}
+.bolt--one{left:60%;top:40%;animation:lightning 3s ease-in-out infinite}
+.bolt--two{left:72%;top:46%;animation:lightning 3s ease-in-out infinite 1.4s}
+@keyframes lightning{0%,72%,100%{opacity:0;transform:translateY(0)}76%{opacity:1;transform:translateY(2px)}80%{opacity:.2}84%{opacity:1}}
 @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
 
 /* Respect reduced motion */
