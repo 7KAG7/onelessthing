@@ -1,5 +1,6 @@
-import React, {useState} from 'react'
+import React, {useEffect, useMemo, useState} from 'react'
 import { FaHatCowboy, FaTshirt, FaShoePrints, FaUmbrella, FaGem, FaBoxOpen } from 'react-icons/fa'
+import { GiTrousers, GiGloves } from 'react-icons/gi'
 
 type TileItem = {
   name: string
@@ -8,8 +9,17 @@ type TileItem = {
   image?: string
 }
 
-function IconForSlot({ slot, size = 48 }: { slot: string; size?: number }) {
+function IconForItem({ slot, itemName, size = 42 }: { slot: string; itemName: string; size?: number }) {
   const common = { size }
+  const name = (itemName || '').toLowerCase()
+
+  if (name.includes('umbrella')) return <FaUmbrella {...common} />
+  if (name.includes('glove') || name.includes('mitten')) return <GiGloves {...common} />
+  if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sandal')) return <FaShoePrints {...common} />
+  if (name.includes('jean') || name.includes('pant') || name.includes('short') || name.includes('trouser')) return <GiTrousers {...common} />
+  if (name.includes('jacket') || name.includes('sweater') || name.includes('shirt') || name.includes('top')) return <FaTshirt {...common} />
+  if (name.includes('hat') || name.includes('beanie') || name.includes('cap')) return <FaHatCowboy {...common} />
+
   switch (slot.toLowerCase()) {
     case 'head':
       return <FaHatCowboy {...common} />
@@ -29,24 +39,60 @@ function IconForSlot({ slot, size = 48 }: { slot: string; size?: number }) {
   }
 }
 
-export default function Tile({ slot, item, gender }: { slot: string; item: TileItem; gender?: string }) {
-  const [showImage, setShowImage] = useState(Boolean(item.image))
+export default function Tile({
+  slot,
+  item,
+  isLoggedIn,
+  affiliateImageIndex = 0,
+  affiliateKey,
+  onImageSettled
+}: {
+  slot: string;
+  item: TileItem;
+  isLoggedIn: boolean;
+  affiliateImageIndex?: number;
+  affiliateKey?: string | null;
+  onImageSettled?: (affiliateKey: string, idx: number, src: string) => void;
+}) {
+  const apiBase = (import.meta.env.VITE_API_BASE as string) || ''
 
-  function handleError() {
-    setShowImage(false)
+  const imageSrc = useMemo(() => {
+    if (!isLoggedIn) return ''
+    if (item.image) return item.image
+    if (item.link) {
+      return `${apiBase}/api/preview-image?url=${encodeURIComponent(item.link)}&idx=${affiliateImageIndex}`
+    }
+    return ''
+  }, [apiBase, isLoggedIn, item.image, item.link, affiliateImageIndex])
+
+  const [showImage, setShowImage] = useState(Boolean(imageSrc))
+
+  useEffect(() => {
+    setShowImage(Boolean(imageSrc))
+  }, [imageSrc])
+
+  function notifySettled() {
+    if (!affiliateKey || !onImageSettled || !imageSrc) return
+    onImageSettled(affiliateKey, affiliateImageIndex, imageSrc)
   }
 
-  console.debug('Tile', slot, item.name, 'showImage=', showImage)
+  function handleLoad() {
+    notifySettled()
+  }
+
+  function handleError() {
+    notifySettled()
+    setShowImage(false)
+  }
 
   return (
     <article className="tile">
       <div className="tile-media">
-        {showImage && item.image ? (
-          <img src={item.image} alt={item.name} loading="lazy" onError={handleError} />
+        {showImage && imageSrc ? (
+          <img src={imageSrc} alt={item.name} loading="lazy" onLoad={handleLoad} onError={handleError} />
         ) : (
           <div className="tile-placeholder" aria-hidden>
-            <div className="tile-icon"><IconForSlot slot={slot} size={44} /></div>
-            <div className="tile-initials">{(item.name || '').split(' ').slice(0,2).map(s=>s[0]).join('').toUpperCase()}</div>
+            <div className="tile-fallback-icon"><IconForItem slot={slot} itemName={item.name} size={42} /></div>
           </div>
         )}
       </div>
