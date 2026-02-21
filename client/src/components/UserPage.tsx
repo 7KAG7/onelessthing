@@ -4,6 +4,13 @@ import AvatarIcon from './AvatarIcon'
 import { FaSun, FaCloud, FaUmbrella, FaShoePrints } from 'react-icons/fa'
 
 function tokenKey() { return 'olt_token' }
+function profileGenderKey() { return 'olt_profile_sex_preference' }
+
+function normalizeOutfitGender(value?: string) {
+  const v = (value || '').toLowerCase()
+  if (v === 'male' || v === 'female' || v === 'unisex') return v
+  return 'unisex'
+}
 
 export default function UserPage({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'login'|'register'|'profile'>('login')
@@ -30,10 +37,11 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
       const res = await axios.get(`${base}/api/auth/me`)
       setUser(res.data)
       setAgeRange(res.data.ageRange || '')
-      setSexPreference(res.data.sexPreference || '')
+      setSexPreference(normalizeOutfitGender(res.data.sexPreference))
       setAvatar(res.data.avatar)
       setDefaultLocation(res.data.defaultLocation || '')
       if (res.data.defaultLocation) localStorage.setItem('olt_default_location', res.data.defaultLocation)
+      localStorage.setItem(profileGenderKey(), normalizeOutfitGender(res.data.sexPreference))
       setMode('profile')
     } catch (err) {
       console.warn('not logged in')
@@ -79,6 +87,8 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
       setUser(res.data)
       setAvatar(res.data.avatar)
       setDefaultLocation(res.data.defaultLocation)
+      if (res.data.defaultLocation) localStorage.setItem('olt_default_location', res.data.defaultLocation)
+      localStorage.setItem(profileGenderKey(), normalizeOutfitGender(res.data.sexPreference))
       alert('Profile saved')
     } catch (err: any) {
       alert(err?.response?.data?.error || err.message)
@@ -153,7 +163,6 @@ export default function UserPage({ onClose }: { onClose: () => void }) {
             <option value="">Select</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
-            <option value="nb">Non-binary</option>
             <option value="unisex">Unisex</option>
             <option value="notsay">Prefer not to say</option>
           </select>
