@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import axios from 'axios'
 import Tile from './components/Tile'
 import WeatherCard from './components/WeatherCard'
+import UserPage from './components/UserPage'
 
 type Tiles = Record<string, any>
 
@@ -18,6 +19,7 @@ export default function App() {
   const [tiles, setTiles] = useState<Tiles | null>(null)
   const [weather, setWeather] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showUser, setShowUser] = useState(false)
 
   const getOutfit = async () => {
     if (!city.trim()) return alert('Enter a city')
@@ -50,29 +52,35 @@ export default function App() {
             <option value="nb">Non-binary</option>
           </select>
           <button onClick={getOutfit} disabled={loading}>{loading ? 'Loading…' : 'Get Outfit'}</button>
+          <button onClick={() => setShowUser(true)}>Profile</button>
         </div>
       </header>
+      {showUser ? (
+        <main className="tile-column">
+          <UserPage onClose={() => setShowUser(false)} />
+        </main>
+      ) : (
+        <main className="tile-column">
+          {weather && <WeatherCard weather={weather} />}
 
-      <main className="tile-column">
-        {weather && <WeatherCard weather={weather} />}
-
-        {tiles ? (
-          <div className="tiles-vertical">
-            {['head', 'torso', 'bottoms', 'footwear', 'accessories'].map((slot) => {
-              const v = tiles[slot]
-              if (!v) return null
-              if (Array.isArray(v)) {
-                return v.map((it: any, i: number) => (
-                  <Tile key={`${slot}-${i}`} slot={slot} item={it} gender={gender} />
-                ))
-              }
-              return <Tile key={slot} slot={slot} item={v} gender={gender} />
-            })}
-          </div>
-        ) : (
-          <div className="empty">Enter a city and press Get Outfit</div>
-        )}
-      </main>
+          {tiles ? (
+            <div className="tiles-vertical">
+              {['head', 'torso', 'bottoms', 'footwear', 'accessories'].map((slot) => {
+                const v = tiles[slot]
+                if (!v) return null
+                if (Array.isArray(v)) {
+                  return v.map((it: any, i: number) => (
+                    <Tile key={`${slot}-${i}`} slot={slot} item={it} gender={gender} />
+                  ))
+                }
+                return <Tile key={slot} slot={slot} item={v} gender={gender} />
+              })}
+            </div>
+          ) : (
+            <div className="empty">Enter a city and press Get Outfit</div>
+          )}
+        </main>
+      )}
     </div>
   )
 }
