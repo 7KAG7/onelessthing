@@ -28,6 +28,15 @@ main.tile-column{flex:1;padding:20px 28px;display:flex;justify-content:center}
 .weather-summary{margin-bottom:12px;text-align:center;color:#333}
 .empty{color:var(--muted)}
 
+.user-page{max-width:540px;width:100%;background:rgba(255,255,255,0.9);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(16,24,40,0.06)}
+.user-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.auth-box input{display:block;width:100%;padding:8px;margin:6px 0;border-radius:8px;border:1px solid #e6e9ef}
+.profile-box select{display:block;width:100%;padding:8px;margin:6px 0;border-radius:8px;border:1px solid #e6e9ef}
+.user-header button{margin-left:8px;padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff}
+.auth-box button{padding:8px 10px;border-radius:8px;border:0;background:#0b5fff;color:#fff}
+.profile-box button{padding:8px 10px;border-radius:8px;border:0;background:#0b5fff;color:#fff}
+.profile-box .avatar-picker button{padding:6px;background:#fff;border-radius:8px}
+
 .weather-card{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.8);backdrop-filter:blur(6px);padding:12px;border-radius:12px;margin-bottom:16px;box-shadow:0 6px 18px rgba(16,24,40,0.06)}
 .weather-card{position:relative;overflow:hidden}
 .weather-left{display:flex;flex-direction:column;align-items:flex-start}

@@ -2,6 +2,10 @@ import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+import { createUser, findUserByUsername, findUserById, updateUser } from './usersStore';
 
 dotenv.config();
 
@@ -10,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 const OPENWEATHER_KEY = process.env.OPENWEATHER_API_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 
 type WeatherJSON = any;
 
@@ -49,20 +54,7 @@ function suggestOutfit(weather: WeatherJSON, gender?: string) {
     tiles.accessories.push({ name: 'Snow gloves', reason: 'Snow' });
   }
 
-  function toLink(item: any) {
-    const q = encodeURIComponent(item.name + ' ' + (gender || 'unisex'));
-    return `https://www.amazon.com/s?k=${q}`;
-  }
-
-  Object.keys(tiles).forEach((k) => {
-    const v = tiles[k];
-    if (!v) return;
-    if (Array.isArray(v)) {
-      v.forEach((it: any) => { it.link = toLink(it); });
-    } else {
-      v.link = toLink(v);
-    }
-  });
+  // For MVP: frontend will render generic images/icons for items; no affiliate links attached.
 
   return tiles;
 }
@@ -106,6 +98,75 @@ app.get('/api/weather', async (req: Request, res: Response) => {
     return res.json({ weather, tiles });
   } catch (err: any) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Auth & user endpoints (MVP file-backed)
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    const existing = await findUserByUsername(username);
+    if (existing) return res.status(409).json({ error: 'user exists' });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await createUser({ id: uuidv4(), username, passwordHash });
+    const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation } });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    const user = await findUserByUsername(username);
+    if (!user) return res.status(401).json({ error: 'invalid credentials' });
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(401).json({ error: 'invalid credentials' });
+    const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation } });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function authMiddleware(req: Request, res: Response, next: any) {
+  const h = req.headers.authorization as string | undefined;
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'missing token' });
+  const token = h.slice(7);
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as any;
+    (req as any).userId = payload.uid;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'invalid token' });
+  }
+}
+
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const uid = (req as any).userId as string;
+    const user = await findUserById(uid);
+    if (!user) return res.status(404).json({ error: 'not found' });
+    res.json({ id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/user/profile', authMiddleware, async (req, res) => {
+  try {
+    const uid = (req as any).userId as string;
+    const { ageRange, sexPreference, avatar, defaultLocation } = req.body;
+    const updated = await updateUser(uid, { ageRange, sexPreference, avatar, defaultLocation } as any);
+    if (!updated) return res.status(404).json({ error: 'not found' });
+    res.json({ id: updated.id, username: updated.username, ageRange: updated.ageRange, sexPreference: updated.sexPreference, avatar: updated.avatar, defaultLocation: (updated as any).defaultLocation });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
