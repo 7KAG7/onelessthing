@@ -129,6 +129,12 @@ export default function App() {
     await fetchOutfitFor(city, gender)
   }
 
+  async function handleCityKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    await getOutfit()
+  }
+
   const bgClass = genderBackgrounds[gender] || genderBackgrounds.unisex
   const activeAffiliates = React.useMemo(() => {
     if (!tiles) return []
@@ -158,7 +164,12 @@ export default function App() {
       <header className="topbar">
         <h1>One Less Thing</h1>
         <div className="controls">
-          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Enter city (e.g. Boston)" />
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            onKeyDown={handleCityKeyDown}
+            placeholder="Enter city (e.g. Boston)"
+          />
           <select value={gender} onChange={(e) => {
             const next = normalizeOutfitGender(e.target.value)
             setGender(next)
