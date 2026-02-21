@@ -21,6 +21,12 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [showUser, setShowUser] = useState(false)
 
+  // initialize city from persisted default location (set by profile)
+  React.useEffect(() => {
+    const d = localStorage.getItem('olt_default_location')
+    if (d) setCity(d)
+  }, [])
+
   const getOutfit = async () => {
     if (!city.trim()) return alert('Enter a city')
     setLoading(true)

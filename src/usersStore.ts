@@ -11,6 +11,7 @@ export type User = {
   ageRange?: string
   sexPreference?: string
   avatar?: string
+  defaultLocation?: string
 }
 
 async function ensureFile() {

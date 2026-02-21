@@ -4,6 +4,8 @@
     "username": "dudeguykid",
     "passwordHash": "$2a$10$5rjvSPuYFHsTJE7tubcktuMBOI/aN6IFbaZ9lodBlgDIvmkZvvtGK",
     "ageRange": "45-54",
-    "sexPreference": "male"
+    "sexPreference": "male",
+    "defaultLocation": "01519",
+    "avatar": "sun"
   }
 ]
