@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
+import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -12,6 +13,9 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const clientDistDir = path.join(__dirname, '..', 'client', 'dist');
+const legacyPublicDir = path.join(__dirname, '..', 'public');
 
 const OPENWEATHER_KEY = process.env.OPENWEATHER_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
@@ -379,8 +383,13 @@ app.put('/api/user/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// Serve static frontend
-app.use('/', express.static(path.join(__dirname, '..', 'public')));
+// Serve the Vite production build when available, otherwise fall back to the legacy public app.
+const staticDir = fs.existsSync(clientDistDir) ? clientDistDir : legacyPublicDir;
+app.use(express.static(staticDir));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  return res.sendFile(path.join(staticDir, 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
