@@ -8,6 +8,7 @@ export type User = {
   id: string
   username: string
   passwordHash: string
+  age?: number
   ageRange?: string
   sexPreference?: string
   avatar?: string

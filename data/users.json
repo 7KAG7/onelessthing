@@ -7,5 +7,14 @@
     "sexPreference": "male",
     "defaultLocation": "01519",
     "avatar": "sun"
+  },
+  {
+    "id": "9e0781ad-4a66-411c-baed-43bb08f119e3",
+    "username": "Keith",
+    "passwordHash": "$2a$10$EnTUjwbq7NpBvzm1XQy4xOuaTodtHGKM2b9C1C3vMIeB.rVaXbi4a",
+    "age": 45,
+    "ageRange": "",
+    "sexPreference": "male",
+    "defaultLocation": "grafton "
   }
 ]

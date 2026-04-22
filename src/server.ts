@@ -24,11 +24,36 @@ const PREVIEW_CACHE_TTL_MS = 2 * 60 * 1000;
 const PREVIEW_CACHE_MAX_ITEMS = 200;
 
 type WeatherJSON = any;
+type HourlyForecast = {
+  dt: number;
+  temp: number;
+  precipitationProbability: number;
+  precipitation: number;
+  windSpeed: number;
+  weatherCode: number;
+  description: string;
+};
+type RadarPreview = {
+  frameTime: number;
+  host: string;
+  path: string;
+  lat: number;
+  lon: number;
+  zoom: number;
+};
 type CachedPreviewImage = {
   buffer: Buffer;
   contentType: string;
   expiresAt: number;
   lastAccess: number;
+};
+type LocationSuggestion = {
+  name: string;
+  state?: string;
+  country: string;
+  lat: number;
+  lon: number;
+  label: string;
 };
 
 const previewImageCache = new Map<string, CachedPreviewImage>();
@@ -151,29 +176,130 @@ function buildAmazonSearchLink(query: string) {
   return url.toString();
 }
 
-function addAffiliateLink(item: any, gender?: string) {
-  const audience = (() => {
+function getAgeGroup(age?: string | number, ageRange?: string) {
+  const parsedAge = Number(age);
+  if (Number.isFinite(parsedAge) && parsedAge > 0) {
+    if (parsedAge <= 12) return 'child';
+    if (parsedAge <= 17) return 'teen';
+    if (parsedAge >= 65) return 'senior';
+    return 'adult';
+  }
+
+  switch ((ageRange || '').toLowerCase()) {
+    case '<18':
+      return 'teen';
+    case '>=65':
+      return 'senior';
+    default:
+      return 'adult';
+  }
+}
+
+function getGenderAudience(gender?: string) {
+  switch ((gender || '').toLowerCase()) {
+    case 'male':
+      return 'men';
+    case 'female':
+      return 'women';
+    case 'nb':
+      return 'non binary';
+    default:
+      return 'unisex';
+  }
+}
+
+function getSearchAudience(gender?: string, age?: string | number, ageRange?: string) {
+  const ageGroup = getAgeGroup(age, ageRange);
+  if (ageGroup === 'child') {
     switch ((gender || '').toLowerCase()) {
       case 'male':
-        return 'men';
+        return 'boys';
       case 'female':
-        return 'women';
-      case 'nb':
-        return 'non binary';
+        return 'girls';
       default:
-        return 'unisex';
+        return 'kids';
     }
+  }
+  if (ageGroup === 'teen') return `teen ${getGenderAudience(gender)}`;
+  if (ageGroup === 'senior') return `senior ${getGenderAudience(gender)}`;
+  return getGenderAudience(gender);
+}
+
+function getAgeSearchPhrase(age?: string | number) {
+  const parsedAge = Number(age);
+  if (!Number.isFinite(parsedAge) || parsedAge <= 0) return '';
+
+  const roundedAge = Math.round(parsedAge);
+  const minAge = Math.max(1, roundedAge - 5);
+  const maxAge = Math.min(120, roundedAge + 5);
+  return `age ${minAge} to ${maxAge}`;
+}
+
+function adjustItemForAge(item: any, age?: string | number, ageRange?: string) {
+  const ageGroup = getAgeGroup(age, ageRange);
+  if (ageGroup === 'adult') return item;
+
+  const agePrefix = (() => {
+    if (ageGroup === 'child') return 'Kids';
+    if (ageGroup === 'teen') return 'Teen';
+    return 'Comfortable';
   })();
+
+  const seniorNames: Record<string, string> = {
+    'Warm pants': 'Comfort-fit warm pants',
+    Jeans: 'Comfort-fit jeans',
+    'Shorts or light pants': 'Breathable light pants',
+    Boots: 'Supportive weatherproof boots',
+    Sneakers: 'Supportive walking sneakers',
+    'Sandals or sneakers': 'Supportive sandals or sneakers',
+    'Cap or sunhat': 'Wide-brim sun hat',
+    'Light scarf': 'Soft light scarf',
+    Sunglasses: 'Polarized sunglasses'
+  };
+
+  if (ageGroup === 'senior') {
+    return {
+      ...item,
+      name: seniorNames[item.name] || item.name,
+      reason: `${item.reason || 'Weather appropriate'}; comfort-focused`
+    };
+  }
 
   return {
     ...item,
-    link: buildAmazonSearchLink(`${audience} ${item.name} clothing`)
+    name: item.name.toLowerCase().startsWith(agePrefix.toLowerCase()) ? item.name : `${agePrefix} ${item.name}`,
+    reason: `${item.reason || 'Weather appropriate'}; ${ageGroup === 'child' ? 'kid' : 'teen'} appropriate`
   };
 }
 
-function suggestOutfit(weather: WeatherJSON, gender?: string) {
+function addAffiliateLink(item: any, gender?: string, age?: string | number, ageRange?: string) {
+  const adjustedItem = adjustItemForAge(item, age, ageRange);
+  const audience = getSearchAudience(gender, age, ageRange);
+  const ageSearchPhrase = getAgeSearchPhrase(age);
+  const searchQuery = [audience, ageSearchPhrase, adjustedItem.name, 'clothing'].filter(Boolean).join(' ');
+
+  return {
+    ...adjustedItem,
+    link: buildAmazonSearchLink(searchQuery)
+  };
+}
+
+function describeWeatherCode(code: number) {
+  if (code === 0) return 'Clear';
+  if ([1, 2].includes(code)) return 'Partly cloudy';
+  if (code === 3) return 'Cloudy';
+  if ([45, 48].includes(code)) return 'Fog';
+  if ([51, 53, 55, 56, 57].includes(code)) return 'Drizzle';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'Rain';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Snow';
+  if ([95, 96, 99].includes(code)) return 'Storm';
+  return 'Mixed';
+}
+
+function suggestOutfit(weather: WeatherJSON, gender?: string, age?: string | number, ageRange?: string) {
   const temp = weather.main.temp as number; // Fahrenheit
   const cond = (weather.weather[0].main as string).toLowerCase();
+  const windSpeed = Number(weather.wind?.speed || 0);
   const tiles: any = {
     head: null,
     torso: null,
@@ -187,7 +313,6 @@ function suggestOutfit(weather: WeatherJSON, gender?: string) {
     tiles.torso = { name: 'Insulated jacket', reason: 'Cold' };
     tiles.bottoms = { name: 'Warm pants', reason: 'Cold' };
     tiles.footwear = { name: 'Boots', reason: 'Cold' };
-    tiles.accessories.push({ name: 'Gloves', reason: 'Cold' });
   } else if (temp <= 60) {
     tiles.head = { name: 'Beanie or cap', reason: 'Cool' };
     tiles.torso = { name: 'Light jacket or sweater', reason: 'Cool' };
@@ -200,18 +325,25 @@ function suggestOutfit(weather: WeatherJSON, gender?: string) {
     tiles.footwear = { name: 'Sandals or sneakers', reason: 'Warm' };
   }
 
-  if (cond.includes('rain') || cond.includes('drizzle')) {
-    tiles.accessories.push({ name: 'Umbrella', reason: 'Rainy' });
-  }
   if (cond.includes('snow')) {
     tiles.accessories.push({ name: 'Snow gloves', reason: 'Snow' });
+  } else if (cond.includes('rain') || cond.includes('drizzle') || cond.includes('thunderstorm')) {
+    tiles.accessories.push({ name: 'Umbrella', reason: 'Rainy' });
+  } else if (temp <= 40) {
+    tiles.accessories.push({ name: 'Gloves', reason: 'Cold' });
+  } else if (windSpeed >= 15) {
+    tiles.accessories.push({ name: 'Light scarf', reason: 'Windy' });
+  } else if (temp >= 70 || cond.includes('clear')) {
+    tiles.accessories.push({ name: 'Sunglasses', reason: 'Bright or warm' });
+  } else {
+    tiles.accessories.push({ name: 'Light scarf', reason: 'Mild weather' });
   }
 
-  tiles.head = addAffiliateLink(tiles.head, gender);
-  tiles.torso = addAffiliateLink(tiles.torso, gender);
-  tiles.bottoms = addAffiliateLink(tiles.bottoms, gender);
-  tiles.footwear = addAffiliateLink(tiles.footwear, gender);
-  tiles.accessories = tiles.accessories.map((item: any) => addAffiliateLink(item, gender));
+  tiles.head = addAffiliateLink(tiles.head, gender, age, ageRange);
+  tiles.torso = addAffiliateLink(tiles.torso, gender, age, ageRange);
+  tiles.bottoms = addAffiliateLink(tiles.bottoms, gender, age, ageRange);
+  tiles.footwear = addAffiliateLink(tiles.footwear, gender, age, ageRange);
+  tiles.accessories = tiles.accessories.map((item: any) => addAffiliateLink(item, gender, age, ageRange));
 
   return tiles;
 }
@@ -226,6 +358,18 @@ function getOptionalUserId(req: Request) {
   } catch {
     return null;
   }
+}
+
+function publicUser(user: any) {
+  return {
+    id: user.id,
+    username: user.username,
+    age: user.age,
+    ageRange: user.ageRange,
+    sexPreference: user.sexPreference,
+    avatar: user.avatar,
+    defaultLocation: user.defaultLocation
+  };
 }
 
 async function fetchWeatherByCity(city: string): Promise<WeatherJSON> {
@@ -250,11 +394,134 @@ async function fetchWeatherByLatLon(lat: string, lon: string): Promise<WeatherJS
   return res.json();
 }
 
+function formatLocationLabel(location: LocationSuggestion) {
+  return [location.name, location.state, location.country].filter(Boolean).join(', ');
+}
+
+async function fetchLocationSuggestions(query: string, limit: number): Promise<LocationSuggestion[]> {
+  if (!OPENWEATHER_KEY) throw new Error('OPENWEATHER_API_KEY not set');
+  const url = new URL('https://api.openweathermap.org/geo/1.0/direct');
+  url.searchParams.set('q', query);
+  url.searchParams.set('limit', String(limit));
+  url.searchParams.set('appid', OPENWEATHER_KEY);
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`${res.status} ${body.message || res.statusText}`);
+  }
+
+  const seen = new Set<string>();
+  const locations = (await res.json()) as Array<Partial<LocationSuggestion>>;
+  return locations
+    .filter((location) => location.name && location.country && Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lon)))
+    .map((location) => ({
+      name: String(location.name),
+      state: location.state ? String(location.state) : undefined,
+      country: String(location.country),
+      lat: Number(location.lat),
+      lon: Number(location.lon),
+      label: ''
+    }))
+    .map((location) => ({ ...location, label: formatLocationLabel(location) }))
+    .filter((location) => {
+      const key = `${location.label}|${location.lat.toFixed(3)}|${location.lon.toFixed(3)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+async function fetchHourlyForecastByLatLon(lat: string | number, lon: string | number): Promise<HourlyForecast[]> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', String(lat));
+  url.searchParams.set('longitude', String(lon));
+  url.searchParams.set('hourly', 'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m');
+  url.searchParams.set('temperature_unit', 'fahrenheit');
+  url.searchParams.set('wind_speed_unit', 'mph');
+  url.searchParams.set('precipitation_unit', 'inch');
+  url.searchParams.set('forecast_days', '2');
+  url.searchParams.set('timezone', 'UTC');
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`${res.status} ${body.reason || body.message || res.statusText}`);
+  }
+
+  const data = await res.json();
+  const hourly = data.hourly || {};
+  const times: string[] = hourly.time || [];
+  const now = Date.now();
+  const next24Hours = now + 24 * 60 * 60 * 1000;
+
+  return times
+    .map((time, index) => {
+      const timestamp = new Date(`${time}Z`).getTime();
+      const weatherCode = Number(hourly.weather_code?.[index] ?? -1);
+      return {
+        dt: Math.floor(timestamp / 1000),
+        temp: Number(hourly.temperature_2m?.[index] ?? 0),
+        precipitationProbability: Number(hourly.precipitation_probability?.[index] ?? 0),
+        precipitation: Number(hourly.precipitation?.[index] ?? 0),
+        windSpeed: Number(hourly.wind_speed_10m?.[index] ?? 0),
+        weatherCode,
+        description: describeWeatherCode(weatherCode)
+      };
+    })
+    .filter((hour) => {
+      const timestamp = hour.dt * 1000;
+      return timestamp >= now && timestamp <= next24Hours;
+    })
+    .slice(0, 24);
+}
+
+async function fetchRadarPreviewByLatLon(lat: string | number, lon: string | number): Promise<RadarPreview | null> {
+  const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`${res.status} ${body.message || res.statusText}`);
+  }
+
+  const data = await res.json();
+  const frames = data?.radar?.past || [];
+  const latestFrame = frames[frames.length - 1];
+  if (!data?.host || !latestFrame?.path || !latestFrame?.time) return null;
+
+  return {
+    frameTime: Number(latestFrame.time),
+    host: data.host,
+    path: latestFrame.path,
+    lat: Number(lat),
+    lon: Number(lon),
+    zoom: 7
+  };
+}
+
+app.get('/api/locations', async (req: Request, res: Response) => {
+  try {
+    const q = ((req.query.q as string | undefined) || '').trim();
+    const requestedLimit = Number(req.query.limit || 6);
+    const limit = Math.min(10, Math.max(1, Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 6));
+
+    if (!q) return res.json({ locations: [] });
+
+    const locations = await fetchLocationSuggestions(q, limit);
+    return res.json({ locations });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/weather', async (req: Request, res: Response) => {
   try {
     console.log('/api/weather', req.query);
-    const { city, lat, lon, gender } = req.query as Record<string, string>;
+    const { city, lat, lon, gender, age, ageRange } = req.query as Record<string, string>;
     const userId = getOptionalUserId(req);
+    const user = userId ? await findUserById(userId) : null;
+    const profileAge = user?.age ?? age;
+    const profileAgeRange = user?.ageRange ?? ageRange;
     let weather: WeatherJSON;
     if (city) {
       weather = await fetchWeatherByCity(city);
@@ -264,9 +531,20 @@ app.get('/api/weather', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Provide city or lat & lon' });
     }
 
-    const effectiveGender = userId ? gender : 'unisex';
-    const tiles = suggestOutfit(weather, effectiveGender);
-    return res.json({ weather, tiles });
+    const tiles = suggestOutfit(weather, gender, profileAge, profileAgeRange);
+    const forecast = weather.coord
+      ? await fetchHourlyForecastByLatLon(weather.coord.lat, weather.coord.lon).catch((err) => {
+          console.warn('hourly forecast unavailable:', err?.message || err);
+          return [];
+        })
+      : [];
+    const radar = weather.coord
+      ? await fetchRadarPreviewByLatLon(weather.coord.lat, weather.coord.lon).catch((err) => {
+          console.warn('radar preview unavailable:', err?.message || err);
+          return null;
+        })
+      : null;
+    return res.json({ weather, forecast, radar, tiles });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -324,7 +602,7 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUser({ id: uuidv4(), username, passwordHash });
     const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation } });
+    res.json({ token, user: publicUser(user) });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -340,7 +618,7 @@ app.post('/api/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
     const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation } });
+    res.json({ token, user: publicUser(user) });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -365,7 +643,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const uid = (req as any).userId as string;
     const user = await findUserById(uid);
     if (!user) return res.status(404).json({ error: 'not found' });
-    res.json({ id: user.id, username: user.username, ageRange: user.ageRange, sexPreference: user.sexPreference, avatar: user.avatar, defaultLocation: (user as any).defaultLocation });
+    res.json(publicUser(user));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -374,10 +652,14 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 app.put('/api/user/profile', authMiddleware, async (req, res) => {
   try {
     const uid = (req as any).userId as string;
-    const { ageRange, sexPreference, avatar, defaultLocation } = req.body;
-    const updated = await updateUser(uid, { ageRange, sexPreference, avatar, defaultLocation } as any);
+    const { age, sexPreference, defaultLocation } = req.body;
+    const parsedAge = age === '' || age === undefined || age === null ? undefined : Number(age);
+    if (parsedAge !== undefined && (!Number.isFinite(parsedAge) || parsedAge < 1 || parsedAge > 120)) {
+      return res.status(400).json({ error: 'age must be between 1 and 120' });
+    }
+    const updated = await updateUser(uid, { age: parsedAge, sexPreference, defaultLocation } as any);
     if (!updated) return res.status(404).json({ error: 'not found' });
-    res.json({ id: updated.id, username: updated.username, ageRange: updated.ageRange, sexPreference: updated.sexPreference, avatar: updated.avatar, defaultLocation: (updated as any).defaultLocation });
+    res.json(publicUser(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
