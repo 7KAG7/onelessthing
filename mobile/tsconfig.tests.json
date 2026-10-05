@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "..",
+    "outDir": ".test-dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "types": [
+      "node",
+      "react"
+    ],
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/lib/types.ts",
+    "src/lib/validation.ts",
+    "src/lib/format.ts",
+    "src/lib/demo.ts",
+    "src/state/AppState.tsx",
+    "src/lib/api.ts",
+    "src/app/locationRequest.ts"
+  ]
+}

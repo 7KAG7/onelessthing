@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: One Less Thing mobile API foundation. Deploy separately from the existing Lightsail website.
+
+Parameters:
+  Stage:
+    Type: String
+    Default: staging
+    AllowedValues: [staging, production]
+  WeatherSecretArn:
+    Type: String
+    Description: ARN of an existing same-region Secrets Manager JSON secret containing OPENWEATHER_API_KEY. Never pass the key itself.
+    AllowedPattern: '^arn:[a-z0-9-]+:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$'
+  WeatherSecretKmsKeyArn:
+    Type: String
+    Default: ''
+    Description: Optional existing customer-managed KMS key ARN for this secret; leave empty for the AWS-managed Secrets Manager key.
+    AllowedPattern: '^$|^arn:[a-z0-9-]+:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$'
+  CognitoDomainPrefix:
+    Type: String
+    Description: Unique lower-case Cognito hosted-UI prefix for this environment, such as onelessthing-staging-yourteam.
+    AllowedPattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$'
+  MobileCallbackUrls:
+    Type: CommaDelimitedList
+    Default: 'onelessthing://auth/callback'
+    Description: Exact approved redirect URIs. Use separate schemes and clients for staging and production; no wildcards.
+  MobileLogoutUrls:
+    Type: CommaDelimitedList
+    Default: 'onelessthing://auth/signout'
+  BrowserOrigin:
+    Type: String
+    Default: 'https://onelessthing.life'
+    AllowedPattern: '^https://[a-zA-Z0-9.-]+(?::[0-9]+)?$'
+    Description: One approved browser origin; native HTTP requests do not depend on CORS.
+  AmazonAssociateTag:
+    Type: String
+    Default: ''
+
+Conditions:
+  IsProduction: !Equals [!Ref Stage, production]
+  HasSecretKmsKey: !Not [!Equals [!Ref WeatherSecretKmsKeyArn, '']]
+
+Resources:
+  MobileUserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UserPoolTier: LITE
+      DeletionProtection: !If [IsProduction, ACTIVE, INACTIVE]
+      UsernameAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      AutoVerifiedAttributes: [email]
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate: [email]
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 1
+      MfaConfiguration: OPTIONAL
+      EnabledMfas: [SOFTWARE_TOKEN_MFA]
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      UserPoolTags:
+        Application: onelessthing
+        Stage: !Ref Stage
+
+  MobileResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref MobileUserPool
+      Identifier: onelessthing
+      Name: One Less Thing user data
+      Scopes:
+        - ScopeName: user
+          ScopeDescription: Read and manage the signed-in user's own profile and saved outfits
+
+  MobileUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: MobileResourceServer
+    Properties:
+      UserPoolId: !Ref MobileUserPool
+      ClientName: !Sub '${AWS::StackName}-public-mobile'
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, 'onelessthing/user']
+      SupportedIdentityProviders: [COGNITO]
+      CallbackURLs: !Ref MobileCallbackUrls
+      LogoutURLs: !Ref MobileLogoutUrls
+      # OAuth authorization-code flow is used; direct username/password auth is not enabled.
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+      AccessTokenValidity: 15
+      IdTokenValidity: 15
+      RefreshTokenValidity: 7
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      EnableTokenRevocation: true
+      PreventUserExistenceErrors: ENABLED
+      ReadAttributes: [email, email_verified]
+      WriteAttributes: [email]
+
+  MobileUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref MobileUserPool
+      ManagedLoginVersion: 1
+
+  ProfilesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      OnDemandThroughput:
+        MaxReadRequestUnits: 25
+        MaxWriteRequestUnits: 10
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+      Tags:
+        - Key: Application
+          Value: onelessthing
+        - Key: Stage
+          Value: !Ref Stage
+
+  SavedOutfitsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: outfitId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: outfitId
+          KeyType: RANGE
+      OnDemandThroughput:
+        MaxReadRequestUnits: 25
+        MaxWriteRequestUnits: 10
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+      Tags:
+        - Key: Application
+          Value: onelessthing
+        - Key: Stage
+          Value: !Ref Stage
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  FunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  MobileFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteOnlyOwnLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt FunctionLogs.Arn
+        - PolicyName: ReadOnlyWeatherSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref WeatherSecretArn
+              - !If
+                - HasSecretKmsKey
+                - Effect: Allow
+                  Action: kms:Decrypt
+                  Resource: !Ref WeatherSecretKmsKeyArn
+                  Condition:
+                    StringEquals:
+                      'kms:ViaService': !Sub 'secretsmanager.${AWS::Region}.${AWS::URLSuffix}'
+                      'kms:EncryptionContext:SecretARN': !Ref WeatherSecretArn
+                - !Ref AWS::NoValue
+      # No DynamoDB privileges until cloud-sync handlers are implemented and tested.
+
+  MobileHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: '$default'
+      Description: Versioned mobile API; the legacy website remains on Lightsail
+      FailOnWarnings: true
+      DefinitionBody:
+        openapi: '3.0.1'
+        info:
+          title: One Less Thing mobile API
+          version: '1'
+        paths: {}
+      CorsConfiguration:
+        AllowOrigins: [!Ref BrowserOrigin]
+        AllowHeaders: [Authorization, Content-Type]
+        AllowMethods: [GET, PUT, POST, DELETE, OPTIONS]
+        AllowCredentials: false
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogs.Arn
+        # No source IP, request URL/query, claims, tokens, or request/response bodies.
+        Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength"}'
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: '$request.header.Authorization'
+            AuthorizationScopes: ['onelessthing/user']
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${MobileUserPool}'
+              audience: [!Ref MobileUserPoolClient]
+      Tags:
+        Application: onelessthing
+        Stage: !Ref Stage
+
+  MobileApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .build/
+      Handler: handler.handler
+      Runtime: nodejs24.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 25
+      ReservedConcurrentExecutions: 5
+      Role: !GetAtt MobileFunctionRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref FunctionLogs
+        LogFormat: JSON
+        ApplicationLogLevel: WARN
+        SystemLogLevel: WARN
+      Environment:
+        Variables:
+          NODE_ENV: production
+          WEATHER_SECRET_ARN: !Ref WeatherSecretArn
+          AMAZON_ASSOCIATE_TAG: !Ref AmazonAssociateTag
+          PROFILES_TABLE_NAME: !Ref ProfilesTable
+          SAVED_OUTFITS_TABLE_NAME: !Ref SavedOutfitsTable
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: /api/v1/health
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
+        Outfit:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: /api/v1/outfit
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
+        Locations:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: /api/v1/locations
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
+        ProfilePlaceholder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: /api/v1/me
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+        SavedOutfitsPlaceholder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: /api/v1/saved-outfits
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+        SavedOutfitPlaceholder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MobileHttpApi
+            Path: '/api/v1/saved-outfits/{outfitId}'
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+
+Outputs:
+  ApiBaseUrl:
+    Description: Set the mobile API base URL to this HTTPS origin; clients append /api/v1 paths
+    Value: !Sub 'https://${MobileHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  CognitoUserPoolId:
+    Value: !Ref MobileUserPool
+  CognitoClientId:
+    Description: Public app client ID, not a secret
+    Value: !Ref MobileUserPoolClient
+  CognitoIssuer:
+    Value: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${MobileUserPool}'
+  CognitoDomain:
+    Description: Classic hosted-UI OAuth origin; configure PKCE in the native client before using
+    Value: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+  ProfilesTableName:
+    Description: Reserved foundation; cloud persistence is not implemented
+    Value: !Ref ProfilesTable
+  SavedOutfitsTableName:
+    Description: Reserved foundation; cloud persistence is not implemented
+    Value: !Ref SavedOutfitsTable

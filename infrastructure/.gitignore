@@ -1,0 +1,4 @@
+.build/
+.aws-sam/
+samconfig.toml
+env.local.json

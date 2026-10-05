@@ -1,3 +1,13 @@
 node_modules/
 .env
 dist/
+
+# Local environments, credentials, and build output
+.env.*
+!.env.example
+!.env.*.example
+.test-dist/
+.build/
+coverage/
+*.tsbuildinfo
+dist-native/

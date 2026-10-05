@@ -1,0 +1,52 @@
+{
+  "name": "one-less-thing-mobile",
+  "version": "0.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "react-native start",
+    "ios": "react-native run-ios",
+    "android": "react-native run-android",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .js,.cjs,.ts,.tsx",
+    "test": "tsc -p tsconfig.tests.json && node --test tests/*.test.cjs",
+    "bundle:ios": "node scripts/bundle.cjs ios",
+    "bundle:android": "node scripts/bundle.cjs android",
+    "check:release-config": "node scripts/validate-release-config.cjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run bundle:ios && npm run bundle:android",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/geolocation": "3.4.0",
+    "@react-navigation/bottom-tabs": "7.20.0",
+    "@react-navigation/native": "7.5.0",
+    "@react-navigation/native-stack": "7.20.0",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.86.3",
+    "@react-native/eslint-config": "0.86.3",
+    "@react-native/metro-config": "0.86.3",
+    "@react-native/typescript-config": "0.86.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.2.2",
+    "eslint": "8.57.1",
+    "patch-package": "^8.0.1",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "~5.9.3"
+  }
+}

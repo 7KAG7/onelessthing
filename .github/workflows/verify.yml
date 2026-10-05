@@ -1,0 +1,56 @@
+name: Verify app foundations
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+            mobile/package-lock.json
+            infrastructure/package-lock.json
+      - run: npm ci && npm --prefix client ci
+      - run: npm run typecheck && npm test && npm run build
+      - run: npm --prefix mobile ci
+      - run: npm --prefix mobile run check
+        env:
+          CI: '1'
+      - run: npm --prefix infrastructure ci
+      - run: npm --prefix infrastructure run check
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm --prefix mobile ci
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+      - name: Install iOS dependencies
+        working-directory: mobile
+        run: bundle exec pod install --project-directory=ios
+      - name: Compile unsigned iOS simulator app
+        working-directory: mobile
+        run: >-
+          xcodebuild -workspace ios/OneLessThing.xcworkspace
+          -scheme OneLessThing -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO
+          -quiet build

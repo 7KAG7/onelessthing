@@ -7,7 +7,12 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "npm --prefix client run build",
     "build:server": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "npm run test:api",
+    "test:api": "npm run build:server && node --test tests/mobile-api*.test.cjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "mobile": "npm --prefix mobile start",
+    "check": "npm run typecheck && npm test && npm run build && npm --prefix mobile run check && npm --prefix infrastructure run check"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
