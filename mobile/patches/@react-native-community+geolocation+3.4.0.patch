@@ -1,0 +1,133 @@
+diff --git a/node_modules/@react-native-community/geolocation/js/NativeRNCGeolocation.ts b/node_modules/@react-native-community/geolocation/js/NativeRNCGeolocation.ts
+--- a/node_modules/@react-native-community/geolocation/js/NativeRNCGeolocation.ts
++++ b/node_modules/@react-native-community/geolocation/js/NativeRNCGeolocation.ts
+@@ -43,7 +43,7 @@
+   setConfiguration(config: {
+     skipPermissionRequests: boolean;
+     authorizationLevel?: string;
+-    enableBackgroundLocationUpdates?: string;
++    enableBackgroundLocationUpdates?: boolean;
+   }): void;
+   requestAuthorization(
+     success: () => void,
+diff --git a/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm b/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
+--- a/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
++++ b/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
+@@ -64,7 +64,8 @@
+ 
+   return (RNCGeolocationConfiguration) {
+     .skipPermissionRequests = [RCTConvert BOOL:options[@"skipPermissionRequests"]],
+-    .authorizationLevel = [RCTConvert RNCGeolocationAuthorizationLevel:options[@"authorizationLevel"]]
++    .authorizationLevel = [RCTConvert RNCGeolocationAuthorizationLevel:options[@"authorizationLevel"]],
++    .enableBackgroundLocationUpdates = [RCTConvert BOOL:options[@"enableBackgroundLocationUpdates"]]
+   };
+ }
+ 
+@@ -85,6 +86,20 @@
+ }
+ 
+ @end
++
++#ifdef RCT_NEW_ARCH_ENABLED
++// RN codegen passes a typed dictionary reference, not the legacy by-value struct.
++static RNCGeolocationOptions RNCGeolocationOptionsFromSpec(JS::NativeRNCGeolocation::GeolocationOptions &options)
++{
++  NSMutableDictionary *values = [NSMutableDictionary new];
++  if (options.timeout().has_value()) values[@"timeout"] = @(options.timeout().value());
++  if (options.maximumAge().has_value()) values[@"maximumAge"] = @(options.maximumAge().value());
++  if (options.enableHighAccuracy().has_value()) values[@"enableHighAccuracy"] = @(options.enableHighAccuracy().value());
++  if (options.distanceFilter().has_value()) values[@"distanceFilter"] = @(options.distanceFilter().value());
++  if (options.useSignificantChanges().has_value()) values[@"useSignificantChanges"] = @(options.useSignificantChanges().value());
++  return [RCTConvert RNCGeolocationOptions:values];
++}
++#endif
+ 
+ static NSDictionary<NSString *, id> *RNCPositionError(RNCPositionErrorCode code, NSString *msg /* nil for default */)
+ {
+@@ -131,7 +146,11 @@
+ 
+ @end
+ 
++#ifdef RCT_NEW_ARCH_ENABLED
++@interface RNCGeolocation () <CLLocationManagerDelegate, NativeRNCGeolocationSpec>
++#else
+ @interface RNCGeolocation () <CLLocationManagerDelegate>
++#endif
+ 
+ @end
+ 
+@@ -241,10 +260,21 @@
+ 
+ #pragma mark - Public API
+ 
++#ifdef RCT_NEW_ARCH_ENABLED
++RCT_REMAP_METHOD(setConfiguration, setConfiguration:(JS::NativeRNCGeolocation::SpecSetConfigurationConfig &)config)
++{
++  _locationConfiguration = (RNCGeolocationConfiguration) {
++    .skipPermissionRequests = config.skipPermissionRequests(),
++    .authorizationLevel = [RCTConvert RNCGeolocationAuthorizationLevel:config.authorizationLevel()],
++    .enableBackgroundLocationUpdates = config.enableBackgroundLocationUpdates().value_or(false)
++  };
++}
++#else
+ RCT_REMAP_METHOD(setConfiguration, setConfiguration:(RNCGeolocationConfiguration)config)
+ {
+   _locationConfiguration = config;
+ }
++#endif
+ 
+ RCT_REMAP_METHOD(requestAuthorization, requestAuthorization:(RCTResponseSenderBlock)successBlock
+                  error:(RCTResponseSenderBlock)errorBlock)
+@@ -306,7 +336,16 @@
+ }
+ 
+ 
++#ifdef RCT_NEW_ARCH_ENABLED
++RCT_REMAP_METHOD(startObserving, startObserving:(JS::NativeRNCGeolocation::GeolocationOptions &)options)
++{
++  [self startObservingWithOptions:RNCGeolocationOptionsFromSpec(options)];
++}
++
++- (void)startObservingWithOptions:(RNCGeolocationOptions)options
++#else
+ RCT_REMAP_METHOD(startObserving, startObserving:(RNCGeolocationOptions)options)
++#endif
+ {
+   checkLocationConfig();
+     
+@@ -337,9 +376,24 @@
+   }
+ }
+ 
++#ifdef RCT_NEW_ARCH_ENABLED
++RCT_REMAP_METHOD(getCurrentPosition, getCurrentPosition:(JS::NativeRNCGeolocation::GeolocationOptions &)options
++                  position:(RCTResponseSenderBlock)successBlock
++                  error:(RCTResponseSenderBlock)errorBlock)
++{
++  [self getCurrentPositionWithOptions:RNCGeolocationOptionsFromSpec(options)
++                            position:successBlock
++                               error:errorBlock];
++}
++
++- (void)getCurrentPositionWithOptions:(RNCGeolocationOptions)options
++                             position:(RCTResponseSenderBlock)successBlock
++                                error:(RCTResponseSenderBlock)errorBlock
++#else
+ RCT_REMAP_METHOD(getCurrentPosition, getCurrentPosition:(RNCGeolocationOptions)options
+                   position:(RCTResponseSenderBlock)successBlock
+                   error:(RCTResponseSenderBlock)errorBlock)
++#endif
+ {
+   checkLocationConfig();
+ 
+@@ -550,6 +604,10 @@
+   }
+   [_pendingRequests removeAllObjects];
+ 
++  // A failed one-shot request must stop collection after its timeout is cleared.
++  if (!_observingLocation) {
++    [self stopMonitoring];
++  }
+ }
+ 
+ #ifdef RCT_NEW_ARCH_ENABLED

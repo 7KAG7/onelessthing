@@ -1,0 +1,22 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "strict": true,
+    "resolveJsonModule": true,
+    "types": [
+      "node",
+      "react"
+    ]
+  },
+  "include": [
+    "App.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "config/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    ".test-dist",
+    "ios/Pods"
+  ]
+}

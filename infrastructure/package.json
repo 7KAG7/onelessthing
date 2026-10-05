@@ -1,0 +1,21 @@
+{
+  "name": "onelessthing-aws",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "check": "npm run typecheck && npm test",
+    "validate:sam": "sam validate --lint --template-file template.yaml"
+  },
+  "dependencies": { "@aws-sdk/client-secrets-manager": "^3.0.0" },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0",
+    "yaml": "^2.8.0"
+  }
+}

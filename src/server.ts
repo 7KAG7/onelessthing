@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { createUser, findUserByUsername, findUserById, updateUser } from './usersStore';
+import { createMobileRouter } from './mobile/router';
+import { suggestBaseOutfit } from './mobile/outfit';
 
 dotenv.config();
 
@@ -22,6 +24,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const AMAZON_ASSOCIATE_TAG = process.env.AMAZON_ASSOCIATE_TAG || '';
 const PREVIEW_CACHE_TTL_MS = 2 * 60 * 1000;
 const PREVIEW_CACHE_MAX_ITEMS = 200;
+
+app.use('/api/v1', createMobileRouter({ apiKey: OPENWEATHER_KEY, affiliateTag: AMAZON_ASSOCIATE_TAG }));
 
 type WeatherJSON = any;
 type HourlyForecast = {
@@ -300,44 +304,7 @@ function suggestOutfit(weather: WeatherJSON, gender?: string, age?: string | num
   const temp = weather.main.temp as number; // Fahrenheit
   const cond = (weather.weather[0].main as string).toLowerCase();
   const windSpeed = Number(weather.wind?.speed || 0);
-  const tiles: any = {
-    head: null,
-    torso: null,
-    bottoms: null,
-    footwear: null,
-    accessories: []
-  };
-
-  if (temp <= 40) {
-    tiles.head = { name: 'Warm hat', reason: 'Cold: under 40°F' };
-    tiles.torso = { name: 'Insulated jacket', reason: 'Cold' };
-    tiles.bottoms = { name: 'Warm pants', reason: 'Cold' };
-    tiles.footwear = { name: 'Boots', reason: 'Cold' };
-  } else if (temp <= 60) {
-    tiles.head = { name: 'Beanie or cap', reason: 'Cool' };
-    tiles.torso = { name: 'Light jacket or sweater', reason: 'Cool' };
-    tiles.bottoms = { name: 'Jeans', reason: 'Cool' };
-    tiles.footwear = { name: 'Sneakers', reason: 'Cool' };
-  } else {
-    tiles.head = { name: 'Cap or sunhat', reason: 'Warm' };
-    tiles.torso = { name: 'T-shirt or top', reason: 'Warm' };
-    tiles.bottoms = { name: 'Shorts or light pants', reason: 'Warm' };
-    tiles.footwear = { name: 'Sandals or sneakers', reason: 'Warm' };
-  }
-
-  if (cond.includes('snow')) {
-    tiles.accessories.push({ name: 'Snow gloves', reason: 'Snow' });
-  } else if (cond.includes('rain') || cond.includes('drizzle') || cond.includes('thunderstorm')) {
-    tiles.accessories.push({ name: 'Umbrella', reason: 'Rainy' });
-  } else if (temp <= 40) {
-    tiles.accessories.push({ name: 'Gloves', reason: 'Cold' });
-  } else if (windSpeed >= 15) {
-    tiles.accessories.push({ name: 'Light scarf', reason: 'Windy' });
-  } else if (temp >= 70 || cond.includes('clear')) {
-    tiles.accessories.push({ name: 'Sunglasses', reason: 'Bright or warm' });
-  } else {
-    tiles.accessories.push({ name: 'Light scarf', reason: 'Mild weather' });
-  }
+  const tiles: any = suggestBaseOutfit(temp, cond, windSpeed);
 
   tiles.head = addAffiliateLink(tiles.head, gender, age, ageRange);
   tiles.torso = addAffiliateLink(tiles.torso, gender, age, ageRange);
@@ -516,7 +483,6 @@ app.get('/api/locations', async (req: Request, res: Response) => {
 
 app.get('/api/weather', async (req: Request, res: Response) => {
   try {
-    console.log('/api/weather', req.query);
     const { city, lat, lon, gender, age, ageRange } = req.query as Record<string, string>;
     const userId = getOptionalUserId(req);
     const user = userId ? await findUserById(userId) : null;

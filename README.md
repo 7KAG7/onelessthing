@@ -2,7 +2,20 @@
 
 Minimal app that reads weather data and suggests outfit tiles.
 
-## Production
+## Mobile app foundation
+
+The repository includes a bare React Native app in [`mobile/`](mobile/README.md), alongside the existing Vite website. Its checked-in iOS project is `mobile/ios/OneLessThing.xcodeproj`; install CocoaPods dependencies on a Mac and open `mobile/ios/OneLessThing.xcworkspace` in Xcode to run it. With no API URL configured, development builds show a clearly labeled sample preview; edit `apiBaseUrl` in `mobile/config/environment.json` for live weather. See the [Mac setup instructions](mobile/README.md#ios-development-on-a-mac).
+
+- [Frontend design and backend recommendations](docs/MOBILE_PRODUCT.md)
+- [Mobile setup and implemented scope](mobile/README.md)
+- [Versioned API contract](src/mobile/README.md)
+- [AWS serverless scaffold and migration](docs/AWS_MOBILE.md)
+- [Xcode release and App Store checklist](docs/MOBILE_RELEASE.md)
+- [Verification scope and remaining checks](docs/VERIFICATION.md)
+
+The mobile screens, local preferences/saved outfits, live API integration code and undeployed AWS scaffold are implemented. Xcode compilation, native-device testing, signing, archive validation and App Store submission have not been verified in the Linux environment. Cloud account sync remains future work. No production deployment is changed by adding these files.
+
+## Existing web production
 
 Production URL: `https://onelessthing.life`
 
